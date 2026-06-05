@@ -1,4 +1,4 @@
-name: Recovery Build OFRP
+name: Recovery Build OrangeFox 3000
 
 on:
   workflow_dispatch:
