@@ -1,4 +1,4 @@
-name: Recovery Build for klein
+name: Recovery Build for klein1245
 
 on:
   workflow_dispatch:
@@ -58,6 +58,11 @@ jobs:
     - name: Cleanup
       uses: rokibhasansagar/slimhub_actions@main
 
+    - name: Clean old fox workspace
+      run: |
+        rm -rf /home/runner/work/Action-OFRP-Builder/Action-OFRP-Builder/workspace/fox_12.1
+        echo "Old fox_12.1 workspace removed"
+        
     - name: Initialize workspace
       run: |
         mkdir workspace
