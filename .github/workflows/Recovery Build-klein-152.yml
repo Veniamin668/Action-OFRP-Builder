@@ -1,4 +1,4 @@
-name: Recovery Build for klein12
+name: Recovery Build for klein152
 
 on:
   workflow_dispatch:
