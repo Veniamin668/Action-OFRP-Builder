@@ -137,6 +137,13 @@ jobs:
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
       continue-on-error: true
 
+    - name: Find generated images
+      run: |
+        echo "=== ПОИСК ВСЕХ ОБРАЗОВ В ПАПКЕ ВЫВОДА ==="
+        find out/target/product/klein/ -name "*.img" -o -name "*.zip"
+      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+
+
     - name: Check the output directory before uploading
       run: |
         ls -al ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}/out/target/product/
