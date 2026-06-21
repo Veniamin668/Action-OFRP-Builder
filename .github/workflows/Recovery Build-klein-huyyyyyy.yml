@@ -133,11 +133,6 @@ jobs:
           export ALLOW_MISSING_DEPENDENCIES=true
           lunch ${{ github.event.inputs.MAKEFILE_NAME }}-eng
           
-          # Очистка старых объектов
-          rm -rf out/target/product/klein/obj/PACKAGING/target_files_intermediates
-          rm -f out/target/product/klein/vendor_boot.img
-          rm -f out/target/product/klein/recovery.img
-          
           # Явная сборка
           make -j$(nproc --all) vendorbootimage recoveryimage
           
