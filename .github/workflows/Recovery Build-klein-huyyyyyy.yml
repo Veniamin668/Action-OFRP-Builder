@@ -134,7 +134,7 @@ jobs:
           lunch ${{ github.event.inputs.MAKEFILE_NAME }}-eng
           
           # Явная сборка
-          make -j$(nproc --all) vendorbootimage recoveryimage
+          mka -j$(nproc --all) vendorbootimage recoveryimage
           
           # ПРОВЕРКА НАЛИЧИЯ ФАЙЛОВ
           if [ -f out/target/product/klein/vendor_boot.img ] || [ -f out/target/product/klein/recovery.img ]; then
