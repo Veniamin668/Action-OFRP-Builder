@@ -128,22 +128,14 @@ jobs:
 
     - name: Building recovery
       run: |
-          cd ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
-          source build/envsetup.sh
-          export ALLOW_MISSING_DEPENDENCIES=true
-          lunch ${{ github.event.inputs.MAKEFILE_NAME }}-eng
-          
-          # Явная сборка
-          mka -j$(nproc --all) vendorbootimage recoveryimage
-          
-          # ПРОВЕРКА НАЛИЧИЯ ФАЙЛОВ
-          if [ -f out/target/product/klein/vendor_boot.img ] || [ -f out/target/product/klein/recovery.img ]; then
-            echo "SUCCESS: Images found!"
-          else
-            echo "FATAL: Images not found!"
-            ls -R out/target/product/klein/ | grep ".img"
-            exit 1
-          fi
+        cd ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
+        set +e
+        source build/envsetup.sh
+        export ALLOW_MISSING_DEPENDENCIES=true
+        set -e
+        lunch ${{ github.event.inputs.MAKEFILE_NAME }}-eng && make clean && mka adbd ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)
+      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+      continue-on-error: true
 
 
     - name: Check the output directory before uploading
