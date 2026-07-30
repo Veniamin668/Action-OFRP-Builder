@@ -1,4 +1,4 @@
-name: Recovery Buildук 30000402430430403
+name: Recovery Buildук
 
 on:
   workflow_dispatch:
@@ -14,7 +14,7 @@ on:
       DEVICE_TREE_URL:
         description: 'DEVICE_TREE_URL'
         required: true
-        default: 'https://github.com/Veniamin668/ofox_device_tree_missi'
+        default: 'https://github.com/Veniamin668/android_device_redmi_klein-twrp'
       DEVICE_TREE_BRANCH:
         description: 'DEVICE_TREE_BRANCH'
         required: true
@@ -22,7 +22,7 @@ on:
       DEVICE_PATH:
         description: 'DEVICE_PATH'
         required: true
-        default: 'device/xiaomi/missi'
+        default: 'device/redmi/klein'
       COMMON_TREE_URL:
         description: 'COMMON_TREE_URL (if no common tree, leave blank)'
         required: false
@@ -32,11 +32,11 @@ on:
       DEVICE_NAME:
         description: 'DEVICE_NAME'
         required: true
-        default: 'missi'
+        default: 'klein'
       MAKEFILE_NAME:
         description: 'MAKEFILE_NAME'
         required: true
-        default: 'omni_missi'
+        default: 'twrp_klein'
       BUILD_TARGET:
         description: 'BUILD_TARGET'
         required: true
