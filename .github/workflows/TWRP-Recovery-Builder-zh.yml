@@ -86,7 +86,6 @@ on:
         default: false
         type: boolean
 
-      # ===== 新增 Himax 补丁开关 =====
       apply_himax_touch_patch:
         description: '是否应用 Himax 触摸屏修复补丁（解决 Himax 触控不释放的问题）'
         required: true
@@ -175,7 +174,6 @@ jobs:
           cd twrp
           repo sync --force-sync --no-tags --no-clone-bundle -j$(nproc)
 
-      # ========== 可选：应用展讯DRM补丁 ==========
       - name: 应用展讯DRM显示修复补丁
         if: github.event.inputs.apply_sprd_drm_patch == 'true'
         run: |
@@ -196,7 +194,6 @@ jobs:
           
           echo "✅ 展讯DRM补丁已应用"
 
-      # ========== 新增：应用 Himax 触摸补丁 ==========
       - name: 应用 Himax 触摸屏修复补丁
         if: github.event.inputs.apply_himax_touch_patch == 'true'
         run: |
@@ -217,148 +214,147 @@ jobs:
           
           echo "✅ Himax 触摸补丁已应用"
 
-      # telegram bot
       - name: 🤖 Settings Telegram Bot & VPS Terminal
         shell: bash
-    run: |
-       # 1. Системное обновление APT пакетов под Python окружение
-       echo "=== [1/5] Обновление системных пакетов ==="
-       sudo apt-get update
-       sudo apt-get install python3-pip python3-setuptools python3-all-dev jq -y
-       python3 -m pip install --upgrade pip
+        run: |
+          # 1. Системное обновление APT пакетов под Python окружение
+          echo "=== [1/5] Обновление системных пакетов ==="
+          sudo apt-get update
+          sudo apt-get install python3-pip python3-setuptools python3-all-dev jq -y
+          python3 -m pip install --upgrade pip
 
-       # 2. Установка библиотек Aiogram и Requests
-       echo "=== [2/5] Установка библиотек Python ==="
-       python3 -m pip install aiogram requests
+          # 2. Установка библиотек Aiogram и Requests
+          echo "=== [2/5] Установка библиотек Python ==="
+          python3 -m pip install aiogram requests
 
-       # 3. Экспорт переменных для скриптов
-       export TG_TOKEN="${{ github.event.inputs.TG_TOKEN }}"
-       export TG_CHAT_ID="${{ github.event.inputs.TG_CHAT_ID }}"
-       export RUN_ID="${{ github.run_id }}"
-       export REPO="${{ github.repository }}"
-       export BRANCH="${{ github.ref_name }}"
+          # 3. Экспорт переменных для скриптов
+          export TG_TOKEN="${{ github.event.inputs.TG_TOKEN }}"
+          export TG_CHAT_ID="${{ github.event.inputs.TG_CHAT_ID }}"
+          export RUN_ID="${{ github.run_id }}"
+          export REPO="${{ github.repository }}"
+          export BRANCH="${{ github.ref_name }}"
 
-       # 4. Создаем отдельный изолированный скрипт для LIVE-карточки (без инлайн-строк)
-       cat << 'EOF' > tg_send_card.py
-       import requests
-       import os
-       import sys
+          # 4. Создаем отдельный изолированный скрипт для LIVE-карточки (без инлайн-строк)
+          cat << 'EOF' > tg_send_card.py
+          import requests
+          import os
+          import sys
 
-       token = os.getenv('TG_TOKEN')
-       chat_id = os.getenv('TG_CHAT_ID')
-       branch = os.getenv('BRANCH')
-       repo = os.getenv('REPO')
-       run_id = os.getenv('RUN_ID')
+          token = os.getenv('TG_TOKEN')
+          chat_id = os.getenv('TG_CHAT_ID')
+          branch = os.getenv('BRANCH')
+          repo = os.getenv('REPO')
+          run_id = os.getenv('RUN_ID')
 
-       username = 'Разработчик'
-       try:
-           chat_res = requests.get(f'https://api.telegram.org/bot{token}/getChat?chat_id={chat_id}', timeout=10).json()
-           if chat_res.get('ok'):
-               username = chat_res['result'].get('first_name', 'Разработчик')
-       except:
-           pass
+          username = 'Разработчик'
+          try:
+              chat_res = requests.get(f'https://api.telegram.org/bot{token}/getChat?chat_id={chat_id}', timeout=10).json()
+              if chat_res.get('ok'):
+                  username = chat_res['result'].get('first_name', 'Разработчик')
+          except:
+              pass
 
-       text = (
-           '🦅 *\\[TWRP KLEIN ULTIMATE BUILDER\\]*\n\n'
-           f'👤 *Разработчик:* {username}\n'
-           f'📱 *Устройство:* Redmi A3x \\(klein\\)\n'
-           f'⚡ *Платформа:* Unisoc T603 \\(sc9863a\\)\n'
-           f'🪵 *Ветка дерева:* \\`{branch}\\`\n\n'
-           '🚀 *Статус:* Развертывание сборочного окружения рекавери\\.\\.\\.\n'
-           '🔄 *Прогресс:* 🟦⬜⬜⬛⬜⬜⬜⬜⬜⬜ \\(10\%\\)\n\n'
-           f'🛠️ \\[Смотреть за компиляцией на GitHub\\](https://github.com/{repo}/actions/runs/{run_id})'
-       )
+          text = (
+              '🦅 *\\[TWRP KLEIN ULTIMATE BUILDER\\]*\n\n'
+              f'👤 *Разработчик:* {username}\n'
+              f'📱 *Устройство:* Redmi A3x \\(klein\\)\n'
+              f'⚡ *Платформа:* Unisoc T603 \\(sc9863a\\)\n'
+              f'🪵 *Ветка дерева:* \\`{branch}\\`\n\n'
+              '🚀 *Статус:* Развертывание сборочного окружения рекавери\\.\\.\\.\n'
+              '🔄 *Прогресс:* 🟦⬜⬜⬛⬜⬜⬜⬜⬜⬜ \\(10\%\\)\n\n'
+              f'🛠️ \\[Смотреть за компиляцией на GitHub\\](https://github.com/{repo}/actions/runs/{run_id})'
+          )
 
-       url = f'https://api.telegram.org/bot{token}/sendMessage'
-       payload = {'chat_id': chat_id, 'text': text, 'parse_mode': 'MarkdownV2', 'disable_web_page_preview': True}
+          url = f'https://api.telegram.org/bot{token}/sendMessage'
+          payload = {'chat_id': chat_id, 'text': text, 'parse_mode': 'MarkdownV2', 'disable_web_page_preview': True}
 
-       res = requests.post(url, json=payload, timeout=15).json()
-       if res.get('ok'):
-           msg_id = res['result']['message_id']
-           with open(os.environ['GITHUB_ENV'], 'a') as f:
-               f.write(f'TG_MSG_ID={msg_id}\n')
-           print(f'✅ Live-карта создана! ID сообщения: {msg_id}')
-       else:
-           print('❌ Ошибка отправки Live-карты!')
-           sys.exit(1)
-       EOF
+          res = requests.post(url, json=payload, timeout=15).json()
+          if res.get('ok'):
+              msg_id = res['result']['message_id']
+              with open(os.environ['GITHUB_ENV'], 'a') as f:
+                  f.write(f'TG_MSG_ID={msg_id}\n')
+              print(f'✅ Live-карта создана! ID сообщения: {msg_id}')
+          else:
+              print('❌ Ошибка отправки Live-карты!')
+              sys.exit(1)
+          EOF
 
-       echo "=== [3/5] Отправка интерактивной Live-карты статуса ==="
-       python3 tg_send_card.py
+          echo "=== [3/5] Отправка интерактивной Live-карты статуса ==="
+          python3 tg_send_card.py
 
-       # 5. Генерируем асинхронный скрипт ВПС-ТЕРМИНАЛА (на Aiogram 3)
-       cat << 'EOF' > tg_vps_bot.py
-       import asyncio
-       import os
-       import sys
-       import subprocess
-       from aiogram import Bot, Dispatcher, types
-       from aiogram.enums import ParseMode
-       from aiogram.filters import Command
+          # 5. Генерируем асинхронный скрипт ВПС-ТЕРМИНАЛА (на Aiogram 3)
+          cat << 'EOF' > tg_vps_bot.py
+          import asyncio
+          import os
+          import sys
+          import subprocess
+          from aiogram import Bot, Dispatcher, types
+          from aiogram.enums import ParseMode
+          from aiogram.filters import Command
 
-       TOKEN = os.getenv("TG_TOKEN")
-       ALLOWED_CHAT_ID = os.getenv("TG_CHAT_ID")
+          TOKEN = os.getenv("TG_TOKEN")
+          ALLOWED_CHAT_ID = os.getenv("TG_CHAT_ID")
 
-       if not TOKEN or not ALLOWED_CHAT_ID:
-           sys.exit(1)
+          if not TOKEN or not ALLOWED_CHAT_ID:
+              sys.exit(1)
 
-       bot = Bot(token=TOKEN)
-       dp = Dispatcher()
+          bot = Bot(token=TOKEN)
+          dp = Dispatcher()
 
-       @dp.message(Command("start"))
-       async def cmd_start(message: types.Message):
-           if str(message.chat.id) != ALLOWED_CHAT_ID: return
-           await message.answer("🛸 *VPS терминал Klein активен\!*\nИспользуй команду `/exec <команда>` во время сборки\.", parse_mode=ParseMode.MARKDOWN_V2)
+          @dp.message(Command("start"))
+          async def cmd_start(message: types.Message):
+              if str(message.chat.id) != ALLOWED_CHAT_ID: return
+              await message.answer("🛸 *VPS терминал Klein активен\!*\nИспользуй команду `/exec <команда>` во время сборки\.", parse_mode=ParseMode.MARKDOWN_V2)
 
-       @dp.message(Command("exec"))
-       async def cmd_exec(message: types.Message):
-           if str(message.chat.id) != ALLOWED_CHAT_ID: return
-           command = message.text.replace("/exec", "").strip()
-           if not command:
-               await message.answer("❌ Введите команду после `/exec`")
-               return
+          @dp.message(Command("exec"))
+          async def cmd_exec(message: types.Message):
+              if str(message.chat.id) != ALLOWED_CHAT_ID: return
+              command = message.text.replace("/exec", "").strip()
+              if not command:
+                  await message.answer("❌ Введите команду после `/exec`")
+                  return
 
-           await message.answer(f"⏳ Выполняю: `{command}`...", parse_mode=ParseMode.MARKDOWN)
-           try:
-               process = subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30)
-               output = process.stdout if process.stdout else ""
-               error = process.stderr if process.stderr else ""
-               
-               response = ""
-               if output: response += f"ℹ️ **Вывод:**\n```text\n{output}\n```\n"
-               if error: response += f"⚠️ **Ошибка:**\n```text\n{error}\n```\n"
-               if not output and not error: response = "✅ Выполнено без вывода."
-               if len(response) > 4000: response = response[:4000] + "\n... (обрезано)"
-               await message.answer(response, parse_mode=ParseMode.MARKDOWN)
-           except subprocess.TimeoutExpired:
-               await message.answer("❌ Превышен таймаут выполнения (30 сек).")
-           except Exception as e:
-               await message.answer(f"❌ Ошибка: `{e}`", parse_mode=ParseMode.MARKDOWN)
+              await message.answer(f"⏳ Выполняю: `{command}`...", parse_mode=ParseMode.MARKDOWN)
+              try:
+                  process = subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30)
+                  output = process.stdout if process.stdout else ""
+                  error = process.stderr if process.stderr else ""
+                  
+                  response = ""
+                  if output: response += f"ℹ️ **Вывод:**\n```text\n{output}\n```\n"
+                  if error: response += f"⚠️ **Ошибка:**\n```text\n{error}\n```\n"
+                  if not output and not error: response = "✅ Выполнено без вывода."
+                  if len(response) > 4000: response = response[:4000] + "\n... (обрезано)"
+                  await message.answer(response, parse_mode=ParseMode.MARKDOWN)
+              except subprocess.TimeoutExpired:
+                  await message.answer("❌ Превышен таймаут выполнения (30 сек).")
+              except Exception as e:
+                  await message.answer(f"❌ Ошибка: `{e}`", parse_mode=ParseMode.MARKDOWN)
 
-       async def main():
-           try:
-               await dp.start_polling(bot)
-           finally:
-               await bot.session.close()
+          async def main():
+              try:
+                  await dp.start_polling(bot)
+              finally:
+                  await bot.session.close()
 
-       if __name__ == "__main__":
-           asyncio.run(main())
-       EOF
+          if __name__ == "__main__":
+              asyncio.run(main())
+          EOF
 
-       # 6. Запускаем Бот-Терминал принудительно в ФОНЕ
-       echo "=== [4/5] Запуск терминала в фоне через nohup ==="
-       nohup python3 tg_vps_bot.py > vps_bot.log 2>&1 &
-       
-       sleep 3
-       if ps aux | grep -v grep | grep -q tg_vps_bot.py; then
-           echo "✅ Бот-терминал успешно запущен в фоне и параллельно слушает команды!"
-       else
-           echo "❌ Ошибка старта фонового бота, чекаем vps_bot.log"
-           cat vps_bot.log
-       fi
-       echo "sosal"
+          # 6. Запускаем Бот-Терминал принудительно в ФОНЕ
+          echo "=== [4/5] Запуск терминала в фоне через nohup ==="
+          nohup python3 tg_vps_bot.py > vps_bot.log 2>&1 &
+          
+          sleep 3
+          if ps aux | grep -v grep | grep -q tg_vps_bot.py; then
+              echo "✅ Бот-терминал успешно запущен в фоне и параллельно слушает команды!"
+          else
+              echo "❌ Ошибка старта фонового бота, чекаем vps_bot.log"
+              cat vps_bot.log
+          fi
+          echo "sosal"
 
-        - name: 编译 recovery 镜像
+      - name: 编译 recovery 镜像
         if: github.event.inputs.build_target == 'recovery'
         run: |
           cd twrp
@@ -367,8 +363,8 @@ jobs:
           make clean
           export USE_CCACHE=0
           mka recoveryimage ALLOW_MISSING_DEPENDENCIES=true
-        # 编译 vendor_boot
-        - name: 编译 vendor_boot 镜像
+
+      - name: 编译 vendor_boot 镜像
         if: github.event.inputs.build_target == 'vendor_boot'
         run: |
           cd twrp
@@ -377,8 +373,7 @@ jobs:
           export USE_CCACHE=0
           mka adbd vendorbootimage ALLOW_MISSING_DEPENDENCIES=true
 
-        # 编译 boot
-        - name: 编译 boot 镜像
+      - name: 编译 boot 镜像
         if: github.event.inputs.build_target == 'boot'
         run: |
           cd twrp
@@ -386,15 +381,16 @@ jobs:
           lunch ${{ github.event.inputs.lunch_target }}
           export USE_CCACHE=0
           mka bootimage ALLOW_MISSING_DEPENDENCIES=true
-        # ========== 上传 Artifact（始终执行） ==========
-        - name: 上传 recovery 镜像 (Artifact)
+
+      - name: 上传 recovery 镜像 (Artifact)
         if: github.event.inputs.build_target == 'recovery'
         uses: actions/upload-artifact@v4
         with:
           name: twrp-recovery-${{ github.event.inputs.device_tree_branch }}-${{ github.sha }}
           path: twrp/out/target/product/*/recovery.img
           if-no-files-found: error
-        - name: 上传 vendor_boot 镜像 (Artifact)
+
+      - name: 上传 vendor_boot 镜像 (Artifact)
         if: github.event.inputs.build_target == 'vendor_boot'
         uses: actions/upload-artifact@v4
         with:
@@ -402,7 +398,7 @@ jobs:
           path: twrp/out/target/product/*/vendor_boot.img
           if-no-files-found: error
 
-          - name: 上传 boot 镜像 (Artifact)
+      - name: 上传 boot 镜像 (Artifact)
         if: github.event.inputs.build_target == 'boot'
         uses: actions/upload-artifact@v4
         with:
@@ -410,7 +406,7 @@ jobs:
           path: twrp/out/target/product/*/boot.img
           if-no-files-found: error
 
-          - name: 上传刷机包 ZIP (Artifact)
+      - name: 上传刷机包 ZIP (Artifact)
         if: github.event.inputs.upload_zip == 'true'
         uses: actions/upload-artifact@v4
         with:
@@ -418,8 +414,7 @@ jobs:
           path: twrp/out/target/product/*/*.zip
           if-no-files-found: warn
 
-          # ========== 可选：上传到 GitHub Release ==========
-          - name: 准备 release 资产
+      - name: 准备 release 资产
         if: github.event.inputs.upload_release == 'true'
         run: |
           mkdir -p release_assets
@@ -440,8 +435,7 @@ jobs:
           echo "📦 Release 资产列表："
           ls -la release_assets/ || echo "没有找到任何文件"
 
-          # 生成 Release 说明
-          - name: 生成 Release 说明
+      - name: 生成 Release 说明
         if: github.event.inputs.upload_release == 'true'
         id: release_body
         run: |
@@ -493,7 +487,7 @@ jobs:
           echo "✅ Release 说明已生成："
           cat release_body.txt
 
-          - name: 创建 GitHub Release 并上传产物
+      - name: 创建 GitHub Release 并上传产物
         if: github.event.inputs.upload_release == 'true'
         uses: softprops/action-gh-release@v2
         with:
