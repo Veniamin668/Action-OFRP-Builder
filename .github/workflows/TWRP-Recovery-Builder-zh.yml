@@ -352,7 +352,6 @@ jobs:
               echo "❌ Ошибка старта фонового бота, чекаем vps_bot.log"
               cat vps_bot.log
           fi
-          echo "sosal"
 
       - name: 编译 recovery 镜像
         if: github.event.inputs.build_target == 'recovery'
