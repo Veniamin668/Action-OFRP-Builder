@@ -55,7 +55,7 @@ on:
       lunch_target:
         description: 'lunch 目标'
         required: true
-        default: 'twrp_klein-ap2a-eng'
+        default: 'twrp_klein-trunk_staging-eng'
         type: string
 
       build_target:
