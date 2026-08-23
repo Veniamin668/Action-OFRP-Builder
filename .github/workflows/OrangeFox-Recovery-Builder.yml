@@ -133,20 +133,28 @@ jobs:
         fi
         echo "DEVICE_TREE_URL=${DEVICE_TREE_URL}" >> $GITHUB_ENV
 
-    - name: Check if Recovery Exist
-      run: |
-        cd ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
-        if [ -f out/target/product/${{ github.event.inputs.DEVICE_NAME }}/OrangeFox*.img ]; then
+        - name: Check if Recovery Exist
+        run: |
+        echo "[*] Ищем артефакты сборки (.img и .zip)..."
+        
+        IMG_FILE=$(find . -type f -name "OrangeFox-*.img" | head -n 1)
+        ZIP_FILE=$(find . -type f -name "OrangeFox-*.zip" | head -n 1)
+        
+        if [ -n "$IMG_FILE" ] && [ -n "$ZIP_FILE" ]; then
             echo "CHECK_IMG_IS_OK=true" >> $GITHUB_ENV
-            echo "FILE_PATH=${GITHUB_WORKSPACE}/OrangeFox/fox_${{ github.event.inputs.MANIFEST_BRANCH }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}" >> $GITHUB_ENV
-            echo "MD5_IMG=$(md5sum out/target/product/${{ github.event.inputs.DEVICE_NAME }}/OrangeFox*.img | cut -d ' ' -f 1)" >> $GITHUB_ENV
-        elif [ -f out/target/product/${{ github.event.inputs.DEVICE_NAME }}/target/product/${{ github.event.inputs.DEVICE_NAME }}/OrangeFox*.img ]; then
-            echo "CHECK_IMG_IS_OK=true" >> $GITHUB_ENV
-            echo "FILE_PATH=${GITHUB_WORKSPACE}/OrangeFox/fox_${{ github.event.inputs.MANIFEST_BRANCH }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/target/product/${{ github.event.inputs.DEVICE_NAME }}" >> $GITHUB_ENV
-            echo "MD5_IMG=$(md5sum out/target/product/${{ github.event.inputs.DEVICE_NAME }}/target/product/${{ github.event.inputs.DEVICE_NAME }}/OrangeFox*.img | cut -d ' ' -f 1)" >> $GITHUB_ENV
+            
+            FILE_DIR=$(dirname "$IMG_FILE")
+            echo "FILE_PATH=$(realpath "$FILE_DIR")" >> $GITHUB_ENV
+            
+            # Считаем MD5 для обоих файлов
+            echo "MD5_IMG=$(md5sum "$IMG_FILE" | cut -d ' ' -f 1)" >> $GITHUB_ENV
+            echo "MD5_ZIP=$(md5sum "$ZIP_FILE" | cut -d ' ' -f 1)" >> $GITHUB_ENV
+            
+            echo "[+] Успешно найдено в: $FILE_DIR"
+            ls -lh "$FILE_DIR"/OrangeFox*
         else
-            echo "Recovery out directory is empty."
-            cd Exit
+            echo "[-] Recovery out directory is empty or missing files."
+            exit 1
         fi
 
     - name: Rename the Recovery
