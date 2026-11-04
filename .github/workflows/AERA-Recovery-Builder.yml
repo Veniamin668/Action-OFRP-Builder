@@ -3,6 +3,7 @@ name: AERA - Build
 
 on:
   workflow_dispatch:
+  
     inputs:
       MANIFEST_BRANCH:
         description: 'AERA Manifest Branch'
