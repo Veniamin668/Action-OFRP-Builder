@@ -1,0 +1,546 @@
+
+name: AERA - Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      MANIFEST_BRANCH:
+        description: 'AERA Manifest Branch'
+        required: true
+        default: 'aera-16.0'
+        type: choice
+        options:
+          - aera-16.0
+
+      DEVICE_TREE:
+        description: 'Custom Recovery Tree'
+        required: true
+        default: 'https://github.com/Veniamin668/device_xiaomi_garden'
+
+      DEVICE_TREE_BRANCH:
+        description: 'Custom Recovery Tree Branch'
+        required: true
+        default: 'aera-16.0-garden'
+
+      DEVICE_PATH:
+        description: 'Device Tree Path'
+        required: true
+        default: 'device/xiaomi/garden'
+
+      DEVICE_NAME:
+        description: 'Device Codename'
+        required: true
+        default: 'garden'
+
+jobs:
+  build:
+    name: Build AERA - ${{ inputs.DEVICE_NAME }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    if: github.event.repository.owner.id == github.event.sender.id
+
+    permissions:
+      contents: write
+
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      MANIFEST_BRANCH: ${{ inputs.MANIFEST_BRANCH }}
+      DEVICE_NAME: ${{ inputs.DEVICE_NAME }}
+      DEVICE_PATH: ${{ inputs.DEVICE_PATH }}
+
+    steps:
+
+      # ================================================
+      # CHECKOUT
+      # ================================================
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ================================================
+      # DISPLAY CONFIGURATION
+      # ================================================
+
+      - name: Display Inputs
+        run: |
+          echo "::group::AERA Build Configuration"
+
+          echo "Builder: $GITHUB_ACTOR"
+          echo "Manifest: $MANIFEST_BRANCH"
+          echo "Device: $DEVICE_NAME"
+          echo "Device Tree: ${{ inputs.DEVICE_TREE }}"
+          echo "Device Branch: ${{ inputs.DEVICE_TREE_BRANCH }}"
+          echo "Device Path: $DEVICE_PATH"
+          echo "Target: recovery"
+
+          echo "::endgroup::"
+
+      # ================================================
+      # RUNNER CLEANUP
+      # ================================================
+
+      - name: Clean-up
+        uses: rokibhasansagar/slimhub_actions@main
+
+      - name: Swap Space
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 24
+
+      - name: Check Runner Resources
+        run: |
+          echo "::group::Runner Resources"
+
+          echo "CPU:"
+          nproc
+
+          echo "Memory:"
+          free -h
+
+          echo "Disk:"
+          df -h
+
+          echo "::endgroup::"
+
+      # ================================================
+      # MANUAL BUILD DEPENDENCIES
+      # ================================================
+
+      - name: Build Environment
+        run: |
+          set -e
+
+          echo "::group::Update Ubuntu"
+
+          sudo apt-get update
+
+          echo "::endgroup::"
+
+          echo "::group::Install Android Build Dependencies"
+
+          sudo apt-get install -y --no-install-recommends \
+            bc \
+            bison \
+            build-essential \
+            ccache \
+            cpio \
+            curl \
+            device-tree-compiler \
+            file \
+            flex \
+            fontconfig \
+            g++-multilib \
+            gcc-multilib \
+            git \
+            git-lfs \
+            gnupg \
+            gperf \
+            imagemagick \
+            jq \
+            lib32readline-dev \
+            lib32z1-dev \
+            libc6-dev-i386 \
+            libelf-dev \
+            libgl1-mesa-dev \
+            libncurses-dev \
+            libssl-dev \
+            libxml2-utils \
+            lz4 \
+            lzop \
+            make \
+            pngcrush \
+            python-is-python3 \
+            python3 \
+            python3-pip \
+            python3-venv \
+            rsync \
+            squashfs-tools \
+            unzip \
+            wget \
+            x11proto-core-dev \
+            xsltproc \
+            zip \
+            zlib1g-dev
+
+          echo "::endgroup::"
+
+          echo "::group::Configure Git LFS"
+
+          git lfs install
+
+          echo "::endgroup::"
+
+          echo "::group::Verify Dependencies"
+
+          git --version
+          git lfs version
+          python3 --version
+          gcc --version
+          make --version
+
+          echo "::endgroup::"
+
+          echo "[+] Manual build environment prepared."
+
+      # ================================================
+      # REPO TOOL
+      # ================================================
+
+      - name: Install Repo Tool
+        run: |
+          set -e
+
+          mkdir -p "$HOME/bin"
+
+          curl -fsSL \
+            https://storage.googleapis.com/git-repo-downloads/repo \
+            -o "$HOME/bin/repo"
+
+          chmod a+x "$HOME/bin/repo"
+
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+
+          export PATH="$HOME/bin:$PATH"
+
+          echo "::group::Repo Version"
+
+          repo version
+
+          echo "::endgroup::"
+
+      # ================================================
+      # AERA SOURCE INITIALIZATION
+      # ================================================
+
+      - name: Initialize AERA Manifest
+        run: |
+          set -e
+
+          AERA_DIR="$GITHUB_WORKSPACE/AERA/aera-$MANIFEST_BRANCH"
+
+          mkdir -p "$AERA_DIR"
+
+          cd "$AERA_DIR"
+
+          git config --global user.name "AERA Builder"
+          git config --global user.email "aera-builder@github-actions.invalid"
+
+          echo "::group::Initialize AERA Android 16"
+
+          repo init \
+            -u https://github.com/AERA-Recovery/android_manifest.git \
+            -b "$MANIFEST_BRANCH"
+
+          echo "::endgroup::"
+
+          echo "AERA_SOURCE_DIR=$AERA_DIR" >> "$GITHUB_ENV"
+
+      # ================================================
+      # SOURCE SYNC
+      # ================================================
+
+      - name: Synchronize AERA Sources
+        run: |
+          set -euo pipefail
+
+          cd "$AERA_SOURCE_DIR"
+
+          echo "::group::Synchronize Android Sources"
+
+          repo sync \
+            -c \
+            --force-sync \
+            --no-clone-bundle \
+            --no-tags \
+            -j2 \
+            2>&1 | tee "$RUNNER_TEMP/aera-sync.log"
+
+          echo "::endgroup::"
+
+          echo "[+] AERA source synchronization completed."
+
+      # ================================================
+      # DEVICE TREE
+      # ================================================
+
+      - name: Clone Device Tree
+        run: |
+          set -e
+
+          cd "$AERA_SOURCE_DIR"
+
+          TREE_URL="${{ inputs.DEVICE_TREE }}"
+          TREE_BRANCH="${{ inputs.DEVICE_TREE_BRANCH }}"
+
+          mkdir -p "$(dirname "$DEVICE_PATH")"
+
+          if [ -e "$DEVICE_PATH" ]; then
+            echo "[-] Device tree path already exists!"
+            exit 1
+          fi
+
+          echo "::group::Clone Garden Device Tree"
+
+          git clone \
+            --single-branch \
+            --branch "$TREE_BRANCH" \
+            "$TREE_URL" \
+            "$DEVICE_PATH"
+
+          cd "$DEVICE_PATH"
+
+          git lfs pull
+
+          COMMIT_ID="$(git rev-parse HEAD)"
+
+          echo "COMMIT_ID=$COMMIT_ID" >> "$GITHUB_ENV"
+
+          echo "::endgroup::"
+
+          echo "[+] Device tree cloned."
+          echo "[+] Commit: $COMMIT_ID"
+
+      # ================================================
+      # VERIFY DEVICE TREE
+      # ================================================
+
+      - name: Verify Device Configuration
+        run: |
+          set -e
+
+          cd "$AERA_SOURCE_DIR"
+
+          echo "::group::Device Tree Validation"
+
+          for file in \
+            "$DEVICE_PATH/BoardConfig.mk" \
+            "$DEVICE_PATH/AndroidProducts.mk" \
+            "$DEVICE_PATH/device.mk"
+          do
+            if [ ! -f "$file" ]; then
+              echo "[-] Missing required file: $file"
+              exit 1
+            fi
+
+            echo "[+] Found: $file"
+          done
+
+          echo "::endgroup::"
+
+      # ================================================
+      # BUILD METADATA
+      # ================================================
+
+      - name: Set Build Metadata
+        run: |
+          set -e
+
+          echo "BUILD_DATE=$(date -u +%Y%m%d)" >> "$GITHUB_ENV"
+          echo "BUILD_TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+
+          TREE_URL="${{ inputs.DEVICE_TREE }}"
+
+          TREE_URL="${TREE_URL%.git}"
+
+          echo "DEVICE_TREE_URL=$TREE_URL" >> "$GITHUB_ENV"
+
+          echo "BUILD_LOG=$GITHUB_WORKSPACE/aera-build.log" >> "$GITHUB_ENV"
+
+      # ================================================
+      # BUILD AERA RECOVERY
+      # ================================================
+
+      - name: Building AERA
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cd "$AERA_SOURCE_DIR"
+
+          echo "::group::AERA Build Initialization"
+
+          # AERA requires this BEFORE envsetup.sh.
+          export AERA_BUILD_DEVICE="$DEVICE_NAME"
+
+          echo "AERA_BUILD_DEVICE=$AERA_BUILD_DEVICE"
+
+          source build/envsetup.sh
+
+          export ALLOW_MISSING_DEPENDENCIES=true
+
+          echo "::endgroup::"
+
+          echo "::group::Lunch Configuration"
+
+          lunch "twrp_${DEVICE_NAME}-bp2a-eng"
+
+          echo "::endgroup::"
+
+          echo "::group::Build Recovery Image"
+
+          echo "Building AERA recovery..."
+
+          mka -j2 adbd recoveryimage \
+            2>&1 | tee "$BUILD_LOG"
+
+          echo "::endgroup::"
+
+          echo "[+] AERA build completed."
+
+      # ================================================
+      # VERIFY OUTPUT
+      # ================================================
+
+      - name: Check Recovery Image
+        run: |
+          set -e
+
+          PRODUCT_DIR="$AERA_SOURCE_DIR/out/target/product/$DEVICE_NAME"
+
+          IMAGE_FILE="$PRODUCT_DIR/recovery.img"
+
+          echo "::group::Recovery Output Validation"
+
+          if [ ! -f "$IMAGE_FILE" ]; then
+            echo "[-] recovery.img was not generated!"
+
+            echo "Available image files:"
+
+            find "$PRODUCT_DIR" \
+              -maxdepth 2 \
+              -type f \
+              -name "*.img" \
+              -print || true
+
+            exit 1
+          fi
+
+          mkdir -p "$GITHUB_WORKSPACE/release"
+
+          cp "$IMAGE_FILE" \
+            "$GITHUB_WORKSPACE/release/recovery.img"
+
+          OUTPUT_FILE="$GITHUB_WORKSPACE/release/recovery.img"
+
+          MD5_IMAGE="$(md5sum "$OUTPUT_FILE" | cut -d ' ' -f 1)"
+          SHA256_IMAGE="$(sha256sum "$OUTPUT_FILE" | cut -d ' ' -f 1)"
+
+          echo "OUTPUT_FILE=$OUTPUT_FILE" >> "$GITHUB_ENV"
+          echo "MD5_IMAGE=$MD5_IMAGE" >> "$GITHUB_ENV"
+          echo "SHA256_IMAGE=$SHA256_IMAGE" >> "$GITHUB_ENV"
+
+          ls -lh "$OUTPUT_FILE"
+
+          echo "[+] Recovery image verified."
+          echo "[+] MD5: $MD5_IMAGE"
+          echo "[+] SHA256: $SHA256_IMAGE"
+
+          echo "::endgroup::"
+
+      # ================================================
+      # UPLOAD BUILD ARTIFACT
+      # ================================================
+
+      - name: Upload Recovery Artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AERA-${{ inputs.DEVICE_NAME }}-${{ github.run_id }}
+          path: ${{ env.OUTPUT_FILE }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      # ================================================
+      # UPLOAD BUILD LOGS
+      # ================================================
+
+      - name: Upload Build Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AERA-Build-Logs-${{ github.run_id }}
+          path: |
+            ${{ github.workspace }}/aera-build.log
+            ${{ runner.temp }}/aera-sync.log
+            ${{ github.workspace }}/AERA/aera-${{ inputs.MANIFEST_BRANCH }}/out/soong.log
+            ${{ github.workspace }}/AERA/aera-${{ inputs.MANIFEST_BRANCH }}/out/verbose.log.gz
+          if-no-files-found: ignore
+          retention-days: 14
+
+      # ================================================
+      # GITHUB RELEASE
+      # ================================================
+
+      - name: Publish GitHub Release
+        if: success()
+        uses: softprops/action-gh-release@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          files: |
+            ${{ env.OUTPUT_FILE }}
+          name: AERA Recovery for ${{ inputs.DEVICE_NAME }} // ${{ env.BUILD_DATE }}
+          tag_name: aera-${{ inputs.DEVICE_NAME }}-${{ github.run_id }}
+          body: |
+            # AERA Recovery - Unofficial Build
+
+            **Device:** ${{ inputs.DEVICE_NAME }}
+
+            **Build Target:** recovery
+
+            **AERA Manifest:** ${{ inputs.MANIFEST_BRANCH }}
+
+            **Build Date:** ${{ env.BUILD_TIMESTAMP }}
+
+            **Device Tree:**
+            ${{ env.DEVICE_TREE_URL }}/tree/${{ inputs.DEVICE_TREE_BRANCH }}
+
+            **Device Tree Commit:**
+            ${{ env.DEVICE_TREE_URL }}/commit/${{ env.COMMIT_ID }}
+
+            **GitHub Actions Run:**
+            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            ---
+
+            ## Checksums
+
+            **MD5:**
+            `${{ env.MD5_IMAGE }}`
+
+            **SHA256:**
+            `${{ env.SHA256_IMAGE }}`
+
+            ---
+
+            Built using the AERA Recovery Android 16.0 manifest.
+
+      # ================================================
+      # BUILD SUMMARY
+      # ================================================
+
+      - name: Build Summary
+        if: always()
+        run: |
+          echo "=========================================="
+          echo "             AERA BUILD SUMMARY"
+          echo "=========================================="
+
+          echo "Device: $DEVICE_NAME"
+          echo "Manifest: $MANIFEST_BRANCH"
+          echo "Target: recovery"
+
+          echo "Tree Branch: ${{ inputs.DEVICE_TREE_BRANCH }}"
+          echo "Tree Commit: ${COMMIT_ID:-Unavailable}"
+
+          if [ -f "$GITHUB_WORKSPACE/release/recovery.img" ]; then
+            echo "Status: SUCCESS"
+            echo "MD5: ${MD5_IMAGE:-Unavailable}"
+            echo "SHA256: ${SHA256_IMAGE:-Unavailable}"
+            ls -lh "$GITHUB_WORKSPACE/release/recovery.img"
+          else
+            echo "Status: FAILED"
+          fi
+
+          echo "=========================================="
