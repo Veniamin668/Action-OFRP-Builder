@@ -1,18 +1,11 @@
 name: Build TWRP for Mi 10 (umi)
 
 on:
-  # 允许手动触发编译
   workflow_dispatch:
-  # 可选：当推送到特定分支时自动编译（可自定义）
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
 
 jobs:
   build:
     runs-on: ubuntu-22.04
-    # 限制运行时间（6小时）
     timeout-minutes: 360
 
     steps:
