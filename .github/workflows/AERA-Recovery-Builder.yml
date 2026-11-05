@@ -1,0 +1,497 @@
+name: AERA - Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      MANIFEST_BRANCH:
+        description: 'AERA Manifest Branch'
+        required: true
+        default: 'aera-16.0'
+        type: choice
+        options:
+          - aera-16.0
+
+      DEVICE_TREE:
+        description: 'Custom Recovery Tree'
+        required: true
+        default: 'https://github.com/Veniamin668/device_xiaomi_garden'
+        type: string
+
+      DEVICE_TREE_BRANCH:
+        description: 'Custom Recovery Tree Branch'
+        required: true
+        default: 'aera-16.0-garden'
+        type: string
+
+      DEVICE_PATH:
+        description: 'Device Tree Path'
+        required: true
+        default: 'device/xiaomi/garden'
+        type: string
+
+      DEVICE_NAME:
+        description: 'Device Codename'
+        required: true
+        default: 'garden'
+        type: string
+
+      USE_CCACHE:
+        description: 'Enable ccache (reuse compiled objects between runs)'
+        required: true
+        default: true
+        type: boolean
+
+jobs:
+  build:
+    name: Build AERA - ${{ inputs.DEVICE_NAME }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    permissions:
+      contents: write
+
+    env:
+      MANIFEST_BRANCH: ${{ inputs.MANIFEST_BRANCH }}
+      DEVICE_TREE: ${{ inputs.DEVICE_TREE }}
+      DEVICE_TREE_BRANCH: ${{ inputs.DEVICE_TREE_BRANCH }}
+      DEVICE_PATH: ${{ inputs.DEVICE_PATH }}
+      DEVICE_NAME: ${{ inputs.DEVICE_NAME }}
+      USE_CCACHE: ${{ inputs.USE_CCACHE && '1' || '0' }}
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+
+    steps:
+      # --------------------------------------------------
+      # CHECKOUT
+      # --------------------------------------------------
+
+      - name: Checkout Builder Repository
+        uses: actions/checkout@v4
+
+      # --------------------------------------------------
+      # RUNNER OPTIMIZATION
+      # --------------------------------------------------
+
+      - name: Optimize GitHub Runner
+        uses: rokibhasansagar/slimhub_actions@main
+
+      - name: Configure Swap Space
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 24
+
+      # --------------------------------------------------
+      # BUILD DEPENDENCIES
+      # --------------------------------------------------
+
+      - name: Install Build Dependencies
+        shell: bash
+        run: |
+          set -e
+
+          sudo apt-get update
+
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            bc \
+            bison \
+            build-essential \
+            ccache \
+            curl \
+            flex \
+            g++-multilib \
+            gcc-multilib \
+            git \
+            git-lfs \
+            gnupg \
+            gperf \
+            imagemagick \
+            lib32readline-dev \
+            lib32z1-dev \
+            libelf-dev \
+            liblz4-tool \
+            repo \
+            libncurses-dev \
+            libssl-dev \
+            libxml2 \
+            libxml2-utils \
+            lzop \
+            openjdk-21-jdk \
+            pngcrush \
+            python3 \
+            python-is-python3 \
+            rsync \
+            schedtool \
+            squashfs-tools \
+            unzip \
+            xz-utils \
+            zip \
+            zlib1g-dev
+
+          git config --global user.name "AERA Builder"
+          git config --global user.email "builder@github-actions.local"
+
+      # --------------------------------------------------
+      # CCACHE
+      # --------------------------------------------------
+
+      - name: Cache ccache
+        if: inputs.USE_CCACHE
+        uses: actions/cache@v6
+        with:
+          path: .ccache
+          key: ccache-aera-${{ runner.os }}-${{ runner.arch }}-${{ inputs.DEVICE_NAME }}-${{ github.run_id }}
+          restore-keys: |
+            ccache-aera-${{ runner.os }}-${{ runner.arch }}-${{ inputs.DEVICE_NAME }}-
+
+      - name: Configure ccache
+        if: inputs.USE_CCACHE
+        shell: bash
+        run: |
+          set -e
+
+          mkdir -p "$CCACHE_DIR"
+
+          ccache -M 5G
+          ccache -o compression=true
+          ccache -z
+
+          echo "===== CCACHE CONFIGURATION ====="
+          ccache -p
+          ccache -s
+
+      # --------------------------------------------------
+      # REPO TOOL
+      # --------------------------------------------------
+
+      - name: Install Repo Tool
+        shell: bash
+        run: |
+          set -e
+
+          mkdir -p "$HOME/bin"
+
+          curl -fsSL \
+            https://storage.googleapis.com/git-repo-downloads/repo \
+            -o "$HOME/bin/repo"
+
+          chmod +x "$HOME/bin/repo"
+
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+
+          repo version
+
+      # --------------------------------------------------
+      # AERA SOURCE
+      # --------------------------------------------------
+
+      - name: Initialize AERA Manifest
+        shell: bash
+        run: |
+          set -e
+
+          mkdir -p "$GITHUB_WORKSPACE/AERA"
+          cd "$GITHUB_WORKSPACE/AERA"
+
+          repo init \
+            -u https://github.com/AERA-Recovery/android_manifest.git \
+            -b "$MANIFEST_BRANCH" \
+            --depth=1
+
+      - name: Sync AERA Sources
+        shell: bash
+        run: |
+          set -e
+
+          cd "$GITHUB_WORKSPACE/AERA"
+
+          repo sync \
+            -c \
+            --force-sync \
+            --no-clone-bundle \
+            --no-tags \
+            -j2
+
+      # --------------------------------------------------
+      # DEVICE TREE
+      # --------------------------------------------------
+
+      - name: Clone Device Tree
+        id: device_tree
+        shell: bash
+        run: |
+          set -e
+
+          SOURCE_DIR="$GITHUB_WORKSPACE/AERA"
+          TREE_DIR="$SOURCE_DIR/$DEVICE_PATH"
+
+          mkdir -p "$(dirname "$TREE_DIR")"
+
+          git clone \
+            --depth=1 \
+            --branch "$DEVICE_TREE_BRANCH" \
+            "$DEVICE_TREE" \
+            "$TREE_DIR"
+
+          if [[ ! -f "$TREE_DIR/BoardConfig.mk" ]]; then
+            echo "::error::BoardConfig.mk not found!"
+            exit 1
+          fi
+
+          if [[ ! -f "$TREE_DIR/AndroidProducts.mk" ]]; then
+            echo "::error::AndroidProducts.mk not found!"
+            exit 1
+          fi
+
+          if [[ ! -f "$TREE_DIR/device.mk" ]]; then
+            echo "::error::device.mk not found!"
+            exit 1
+          fi
+
+          TREE_COMMIT="$(git -C "$TREE_DIR" rev-parse HEAD)"
+
+          echo "tree_dir=$TREE_DIR" >> "$GITHUB_OUTPUT"
+          echo "commit_id=$TREE_COMMIT" >> "$GITHUB_OUTPUT"
+
+          echo "Device tree: $TREE_DIR"
+          echo "Device commit: $TREE_COMMIT"
+
+      # --------------------------------------------------
+      # BUILD METADATA
+      # --------------------------------------------------
+
+      - name: Prepare Build Metadata
+        id: metadata
+        shell: bash
+        run: |
+          set -e
+
+          SOURCE_DIR="$GITHUB_WORKSPACE/AERA"
+          PRODUCT_DIR="$SOURCE_DIR/out/target/product/$DEVICE_NAME"
+
+          echo "source_dir=$SOURCE_DIR" >> "$GITHUB_OUTPUT"
+          echo "product_dir=$PRODUCT_DIR" >> "$GITHUB_OUTPUT"
+
+          echo "device_name=$DEVICE_NAME" >> "$GITHUB_OUTPUT"
+          echo "manifest_branch=$MANIFEST_BRANCH" >> "$GITHUB_OUTPUT"
+          echo "tree_branch=$DEVICE_TREE_BRANCH" >> "$GITHUB_OUTPUT"
+
+          echo "build_date=$(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> "$GITHUB_OUTPUT"
+          echo "run_id=$GITHUB_RUN_ID" >> "$GITHUB_OUTPUT"
+
+      # --------------------------------------------------
+      # BUILD
+      # --------------------------------------------------
+
+      - name: Build AERA Recovery
+        id: build
+        shell: bash
+        run: |
+          set -eo pipefail
+
+          cd "$GITHUB_WORKSPACE/AERA"
+
+          export AERA_BUILD_DEVICE="$DEVICE_NAME"
+
+          source build/envsetup.sh
+
+          lunch "twrp_${DEVICE_NAME}-bp2a-eng"
+
+          mka -j2 adbd recoveryimage 2>&1 | tee "$GITHUB_WORKSPACE/build.log"
+
+      # --------------------------------------------------
+      # CCACHE STATISTICS AND SAVE
+      # --------------------------------------------------
+
+      - name: Collect ccache Statistics
+        id: ccache_stats
+        if: always()
+        shell: bash
+        env:
+          CCACHE_ENABLED: ${{ env.USE_CCACHE }}
+        run: |
+          set +e
+
+          if [[ "$CCACHE_ENABLED" != "1" ]]; then
+            echo "status=Not used (disabled)" >> "$GITHUB_OUTPUT"
+            echo "hits=0" >> "$GITHUB_OUTPUT"
+            echo "misses=0" >> "$GITHUB_OUTPUT"
+            echo "hit_rate=0%" >> "$GITHUB_OUTPUT"
+            echo "cache_size=0 GB" >> "$GITHUB_OUTPUT"
+            echo "ccache was disabled."
+            exit 0
+          fi
+
+          if ! command -v ccache >/dev/null 2>&1; then
+            echo "status=Unavailable (ccache command not found)" >> "$GITHUB_OUTPUT"
+            echo "hits=N/A" >> "$GITHUB_OUTPUT"
+            echo "misses=N/A" >> "$GITHUB_OUTPUT"
+            echo "hit_rate=N/A" >> "$GITHUB_OUTPUT"
+            echo "cache_size=N/A" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          STATS="$(ccache -s 2>&1)"
+          printf '%s\n' "$STATS"
+
+          HITS="$(awk '/^[[:space:]]*Hits:/ { print $2; exit }' <<< "$STATS")"
+          MISSES="$(awk '/^[[:space:]]*Misses:/ { print $2; exit }' <<< "$STATS")"
+          HIT_RATE="$(awk '/^[[:space:]]*Hits:/ { gsub(/[()]/, "", $5); if ($5 ~ /%/) print $5; exit }' <<< "$STATS")"
+          CACHE_SIZE="$(awk -F': ' '/Cache size \(GB\):/ { split($2, a, /[[:space:]]+/); print a[1] " GB"; exit }' <<< "$STATS")"
+
+          HITS="${HITS:-0}"
+          MISSES="${MISSES:-0}"
+          HIT_RATE="${HIT_RATE:-0%}"
+          CACHE_SIZE="${CACHE_SIZE:-Unknown}"
+
+          if [[ "$HITS" == "0" && "$MISSES" == "0" ]]; then
+            STATUS="Enabled (no cacheable calls recorded)"
+          else
+            STATUS="Used"
+          fi
+
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+          echo "hits=$HITS" >> "$GITHUB_OUTPUT"
+          echo "misses=$MISSES" >> "$GITHUB_OUTPUT"
+          echo "hit_rate=$HIT_RATE" >> "$GITHUB_OUTPUT"
+          echo "cache_size=$CACHE_SIZE" >> "$GITHUB_OUTPUT"
+
+
+      # --------------------------------------------------
+      # PACKAGE OUTPUT
+      # --------------------------------------------------
+
+      - name: Collect Recovery Image
+        id: package
+        shell: bash
+        run: |
+          set -e
+
+          PRODUCT_DIR="$GITHUB_WORKSPACE/AERA/out/target/product/$DEVICE_NAME"
+          OUTPUT_FILE="$PRODUCT_DIR/recovery.img"
+
+          if [[ ! -f "$OUTPUT_FILE" ]]; then
+            echo "::error::Recovery image not found: $OUTPUT_FILE"
+            exit 1
+          fi
+
+          MD5_IMAGE="$(md5sum "$OUTPUT_FILE" | awk '{print $1}')"
+          SHA256_IMAGE="$(sha256sum "$OUTPUT_FILE" | awk '{print $1}')"
+
+          RELEASE_TAG="aera-${DEVICE_NAME}-${GITHUB_RUN_ID}"
+
+          echo "output_file=$OUTPUT_FILE" >> "$GITHUB_OUTPUT"
+          echo "md5_image=$MD5_IMAGE" >> "$GITHUB_OUTPUT"
+          echo "sha256_image=$SHA256_IMAGE" >> "$GITHUB_OUTPUT"
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+
+          echo "Recovery image found."
+          echo "MD5: $MD5_IMAGE"
+          echo "SHA256: $SHA256_IMAGE"
+
+      # --------------------------------------------------
+      # ARTIFACT
+      # --------------------------------------------------
+
+      - name: Upload Recovery Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AERA-${{ inputs.DEVICE_NAME }}-Recovery
+          path: ${{ steps.package.outputs.output_file }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      # --------------------------------------------------
+      # RELEASE
+      # --------------------------------------------------
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.package.outputs.release_tag }}
+          name: AERA Recovery - ${{ inputs.DEVICE_NAME }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: ${{ steps.package.outputs.output_file }}
+          body: |
+            ## AERA Recovery Build
+
+            **Device:** ${{ steps.metadata.outputs.device_name }}
+
+            **Manifest branch:** ${{ steps.metadata.outputs.manifest_branch }}
+
+            **Device tree branch:** ${{ steps.metadata.outputs.tree_branch }}
+
+            **Device tree commit:** `${{ steps.device_tree.outputs.commit_id }}`
+
+            **Build date:** ${{ steps.metadata.outputs.build_date }}
+
+            **MD5:** `${{ steps.package.outputs.md5_image }}`
+
+            **SHA256:** `${{ steps.package.outputs.sha256_image }}`
+
+            ---
+            Built automatically using GitHub Actions.
+
+      # --------------------------------------------------
+      # BUILD LOGS
+      # --------------------------------------------------
+
+      - name: Upload Build Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AERA-${{ inputs.DEVICE_NAME }}-Build-Logs
+          path: |
+            build.log
+            AERA/out/soong.log
+            AERA/out/error.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # --------------------------------------------------
+      # SUMMARY
+      # --------------------------------------------------
+
+      - name: Build Summary
+        if: always()
+        shell: bash
+        env:
+          OUTPUT_FILE: ${{ steps.package.outputs.output_file }}
+          MD5_IMAGE: ${{ steps.package.outputs.md5_image }}
+          SHA256_IMAGE: ${{ steps.package.outputs.sha256_image }}
+          COMMIT_ID: ${{ steps.device_tree.outputs.commit_id }}
+          RELEASE_TAG: ${{ steps.package.outputs.release_tag }}
+          CCACHE_STATUS: ${{ steps.ccache_stats.outputs.status }}
+          CCACHE_HITS: ${{ steps.ccache_stats.outputs.hits }}
+          CCACHE_MISSES: ${{ steps.ccache_stats.outputs.misses }}
+          CCACHE_HIT_RATE: ${{ steps.ccache_stats.outputs.hit_rate }}
+          CCACHE_SIZE: ${{ steps.ccache_stats.outputs.cache_size }}
+        run: |
+          {
+            echo "# AERA Recovery Build"
+            echo ""
+
+            if [[ "${{ job.status }}" == "success" ]]; then
+              echo "## Build completed successfully"
+            else
+              echo "## Build failed"
+            fi
+
+            echo ""
+            echo "| Property | Value |"
+            echo "|---|---|"
+            echo "| Device | $DEVICE_NAME |"
+            echo "| Manifest | $MANIFEST_BRANCH |"
+            echo "| Tree branch | $DEVICE_TREE_BRANCH |"
+            echo "| Tree commit | $COMMIT_ID |"
+            echo "| Recovery | $OUTPUT_FILE |"
+            echo "| Release | $RELEASE_TAG |"
+            echo "| MD5 | $MD5_IMAGE |"
+            echo "| SHA256 | $SHA256_IMAGE |"
+            echo "| ccache status | ${CCACHE_STATUS:-Unknown} |"
+            echo "| ccache hits | ${CCACHE_HITS:-N/A} |"
+            echo "| ccache misses | ${CCACHE_MISSES:-N/A} |"
+            echo "| ccache hit rate | ${CCACHE_HIT_RATE:-N/A} |"
+            echo "| ccache size | ${CCACHE_SIZE:-N/A} |"
+          } >> "$GITHUB_STEP_SUMMARY"
